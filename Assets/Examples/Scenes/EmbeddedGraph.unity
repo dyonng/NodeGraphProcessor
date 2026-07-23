@@ -328,7 +328,7 @@ MonoBehaviour:
       height: 364
     opened: 1
     editorType:
-      serializedType: GraphProcessor.ExposedParameterView, com.alelievr.NodeGraphProcessor.Editor,
+      serializedType: GraphProcessor.ExposedParameterView, com.dyonng.NodeGraphProcessor.Editor,
         Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
   exposedParameters:
   - id: 4
@@ -399,7 +399,7 @@ MonoBehaviour:
         nodeLock: 0
         output: {fileID: 727712389}
     00000004:
-      type: {class: FloatParameter, ns: GraphProcessor, asm: com.alelievr.NodeGraphProcessor.Runtime}
+      type: {class: FloatParameter, ns: GraphProcessor, asm: com.dyonng.NodeGraphProcessor.Runtime}
       data:
         guid: a472c60e-19a1-4f94-b11f-4bc5028d85b1
         name: New Float
@@ -413,7 +413,7 @@ MonoBehaviour:
           id: 6
         val: 0
     00000005:
-      type: {class: StringParameter, ns: GraphProcessor, asm: com.alelievr.NodeGraphProcessor.Runtime}
+      type: {class: StringParameter, ns: GraphProcessor, asm: com.dyonng.NodeGraphProcessor.Runtime}
       data:
         guid: aacd4807-50f3-494b-8998-e63de73e2b45
         name: New String
@@ -427,7 +427,7 @@ MonoBehaviour:
           id: 7
         val: 
     00000006:
-      type: {class: FloatParameter/FloatSettings, ns: GraphProcessor, asm: com.alelievr.NodeGraphProcessor.Runtime}
+      type: {class: FloatParameter/FloatSettings, ns: GraphProcessor, asm: com.dyonng.NodeGraphProcessor.Runtime}
       data:
         isHidden: 0
         expanded: 0
@@ -436,7 +436,7 @@ MonoBehaviour:
         min: 0
         max: 1
     00000007:
-      type: {class: ExposedParameter/Settings, ns: GraphProcessor, asm: com.alelievr.NodeGraphProcessor.Runtime}
+      type: {class: ExposedParameter/Settings, ns: GraphProcessor, asm: com.dyonng.NodeGraphProcessor.Runtime}
       data:
         isHidden: 0
         expanded: 0

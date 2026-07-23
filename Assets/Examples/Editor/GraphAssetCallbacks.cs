@@ -16,9 +16,9 @@ public class GraphAssetCallbacks
 	}
 
 	[OnOpenAsset(0)]
-	public static bool OnBaseGraphOpened(int instanceID, int line)
+	public static bool OnBaseGraphOpened(int entityId, int line)
 	{
-		var asset = EditorUtility.InstanceIDToObject(instanceID) as BaseGraph;
+		var asset = EditorUtility.EntityIdToObject(entityId) as BaseGraph;
 
 		if (asset != null && AssetDatabase.GetAssetPath(asset).Contains("Examples"))
 		{

@@ -1,10 +1,6 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.IO;
-using System.Reflection;
-using UnityEditor.ProjectWindowCallback;
 
 namespace GraphProcessor
 {
@@ -56,25 +52,18 @@ namespace GraphProcessor
 
 			if (obj == null)
                 return null;
-			else
-				path = AssetDatabase.GetAssetPath(obj.GetInstanceID());
+            path = AssetDatabase.GetAssetPath(obj.GetEntityId());
 
-			if (path.Length > 0)
-			{
-				if (Directory.Exists(path))
-					return path;
-				else
-					return new FileInfo(path).Directory.FullName;
-			}
-			return null;
+            if (path.Length <= 0) return null;
+            return Directory.Exists(path) ? path : new FileInfo(path).Directory!.FullName;
         }
 
-		protected static void CreateDefaultNodeCSharpScritpt()
+		protected static void CreateDefaultNodeCSharpScript()
 		{
 			ProjectWindowUtil.CreateScriptAssetFromTemplateFile(nodeTemplatePath, nodeBaseName);
 		}
 
-		protected static void CreateDefaultNodeViewCSharpScritpt()
+		protected static void CreateDefaultNodeViewCSharpScript()
 		{
 			ProjectWindowUtil.CreateScriptAssetFromTemplateFile(nodeViewTemplatePath, nodeViewBaseName);
 		}

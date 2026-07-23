@@ -57,7 +57,7 @@ MonoBehaviour:
       height: 200
     opened: 1
     editorType:
-      serializedType: GraphProcessor.ExposedParameterView, com.alelievr.NodeGraphProcessor,
+      serializedType: GraphProcessor.ExposedParameterView, com.dyonng.NodeGraphProcessor,
         Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
   - position:
       serializedVersion: 2
@@ -67,7 +67,7 @@ MonoBehaviour:
       height: 200
     opened: 1
     editorType:
-      serializedType: GraphProcessor.ProcessorView, com.alelievr.NodeGraphProcessor,
+      serializedType: GraphProcessor.ProcessorView, com.dyonng.NodeGraphProcessor,
         Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
   - position:
       serializedVersion: 2
@@ -77,7 +77,7 @@ MonoBehaviour:
       height: 200
     opened: 1
     editorType:
-      serializedType: GraphProcessor.ExposedParameterView, com.alelievr.NodeGraphProcessor.Editor,
+      serializedType: GraphProcessor.ExposedParameterView, com.dyonng.NodeGraphProcessor.Editor,
         Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
   exposedParameters: []
   stickyNotes: []
