@@ -18,6 +18,8 @@ namespace GraphProcessor
         internal const float kPortDetectionWidth = 30;
 
         protected Dictionary<BaseNodeView, List<PortView>> compatiblePorts = new Dictionary<BaseNodeView, List<PortView>>();
+        // Pooled per-node port lists so repeated edge-drags don't reallocate a List<PortView> per compatible node every time.
+        Stack<List<PortView>> compatiblePortsListPool = new Stack<List<PortView>>();
         private Edge ghostEdge;
         protected GraphView graphView;
         protected static NodeAdapter nodeAdapter = new NodeAdapter();
@@ -28,6 +30,24 @@ namespace GraphProcessor
         private bool wasPanned;
 
         public bool resetPositionOnPan { get; set; }
+
+        // Returns all current per-node port lists to the pool (cleared) instead of dropping them for the GC to collect.
+        void ClearCompatiblePorts()
+        {
+            foreach (var kp in compatiblePorts)
+            {
+                kp.Value.Clear();
+                compatiblePortsListPool.Push(kp.Value);
+            }
+            compatiblePorts.Clear();
+        }
+
+        List<PortView> RentPortViewList()
+        {
+            if (compatiblePortsListPool.Count > 0)
+                return compatiblePortsListPool.Pop();
+            return new List<PortView>();
+        }
 
         public BaseEdgeDragHelper(IEdgeConnectorListener listener)
         {
@@ -48,7 +68,7 @@ namespace GraphProcessor
                 graphView.ports.ForEach((p) => {
                     p.OnStopEdgeDragging();
                 });
-                compatiblePorts.Clear();
+                ClearCompatiblePorts();
             }
 
             // Clean up ghost edge.
@@ -136,13 +156,13 @@ namespace GraphProcessor
 
             draggedPort.portCapLit = true;
 
-            compatiblePorts.Clear();
+            ClearCompatiblePorts();
 
             foreach (PortView port in graphView.GetCompatiblePorts(draggedPort, nodeAdapter))
             {
                 compatiblePorts.TryGetValue(port.owner, out var portList);
                 if (portList == null)
-                    portList = compatiblePorts[port.owner] = new List<PortView>();
+                    portList = compatiblePorts[port.owner] = RentPortViewList();
                 portList.Add(port);
             }
 
@@ -354,7 +374,7 @@ namespace GraphProcessor
             edgeCandidate.ResetLayer();
 
             edgeCandidate = null;
-            compatiblePorts.Clear();
+            ClearCompatiblePorts();
             Reset(didConnect);
         }
 

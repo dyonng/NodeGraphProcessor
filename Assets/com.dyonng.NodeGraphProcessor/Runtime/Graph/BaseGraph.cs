@@ -515,21 +515,6 @@ namespace GraphProcessor
 			if (nodes.Count == 0)
 				return ;
 
-			// Find graph outputs (end nodes) and reset compute order
-			graphOutputs.Clear();
-			foreach (var node in nodes)
-			{
-				bool hasOutputNodes = false;
-				foreach (var _ in node.GetOutputNodes())
-				{
-					hasOutputNodes = true;
-					break;
-				}
-				if (!hasOutputNodes)
-					graphOutputs.Add(node);
-				node.computeOrder = 0;
-			}
-
 			computeOrderDictionary.Clear();
 			infiniteLoopTracker.Clear();
 
@@ -537,9 +522,27 @@ namespace GraphProcessor
 			{
 				default:
 				case ComputeOrderType.DepthFirst:
+					// graphOutputs is (re)computed inside UpdateComputeOrderDepthFirst as a byproduct
+					// of the traversal-graph build, instead of a separate GetOutputNodes() walk here.
+					foreach (var node in nodes)
+						node.computeOrder = 0;
 					UpdateComputeOrderDepthFirst();
 					break;
 				case ComputeOrderType.BreadthFirst:
+					// Find graph outputs (end nodes) and reset compute order
+					graphOutputs.Clear();
+					foreach (var node in nodes)
+					{
+						bool hasOutputNodes = false;
+						foreach (var _ in node.GetOutputNodes())
+						{
+							hasOutputNodes = true;
+							break;
+						}
+						if (!hasOutputNodes)
+							graphOutputs.Add(node);
+						node.computeOrder = 0;
+					}
 					foreach (var node in nodes)
 						UpdateComputeOrderBreadthFirst(0, node);
 					break;

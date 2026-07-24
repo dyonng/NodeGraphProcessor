@@ -139,6 +139,13 @@ namespace GraphProcessor
         {
             var graph = ConvertGraphToTraversalGraph(g);
 
+            // Derive graph outputs (leaf nodes) from the traversal graph we just built,
+            // instead of a separate full GetOutputNodes() walk over every node.
+            g.graphOutputs.Clear();
+            foreach (var tn in graph.nodes)
+                if (tn.outputs.Count == 0)
+                    g.graphOutputs.Add(tn.node);
+
             // Pass 1: cycle detection (same logic as FindCyclesInGraph)
             List<TarversalNode> cyclicNodes = new List<TarversalNode>();
 

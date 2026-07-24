@@ -785,9 +785,11 @@ namespace GraphProcessor
 		/// <returns>an enumerable of node</returns>
 		public IEnumerable< BaseNode > GetInputNodes()
 		{
+			var result = new List<BaseNode>();
 			foreach (var port in inputPorts)
 				foreach (var edge in port.GetEdges())
-					yield return edge.outputNode;
+					result.Add(edge.outputNode);
+			return result;
 		}
 
 		/// <summary>
@@ -796,9 +798,11 @@ namespace GraphProcessor
 		/// <returns>an enumerable of node</returns>
 		public IEnumerable< BaseNode > GetOutputNodes()
 		{
+			var result = new List<BaseNode>();
 			foreach (var port in outputPorts)
 				foreach (var edge in port.GetEdges())
-					yield return edge.inputNode;
+					result.Add(edge.inputNode);
+			return result;
 		}
 
 		/// <summary>
@@ -860,10 +864,12 @@ namespace GraphProcessor
 		/// <returns></returns>
 		public IEnumerable<NodePort> GetAllPorts()
 		{
+			var result = new List<NodePort>(inputPorts.Count + outputPorts.Count);
 			foreach (var port in inputPorts)
-				yield return port;
+				result.Add(port);
 			foreach (var port in outputPorts)
-				yield return port;
+				result.Add(port);
+			return result;
 		}
 
 		/// <summary>
@@ -872,9 +878,11 @@ namespace GraphProcessor
 		/// <returns></returns>
 		public IEnumerable<SerializableEdge> GetAllEdges()
 		{
+			var result = new List<SerializableEdge>();
 			foreach (var port in GetAllPorts())
 				foreach (var edge in port.GetEdges())
-					yield return edge;
+					result.Add(edge);
+			return result;
 		}
 
 		/// <summary>
