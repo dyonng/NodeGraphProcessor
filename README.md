@@ -1,4 +1,12 @@
 # NodeGraphProcessor
+
+> **This is a fork of [alelievr/NodeGraphProcessor](https://github.com/alelievr/NodeGraphProcessor).**
+> It exists to port the package to Unity 6.5+ and pick up a handful of upstream fixes and internal
+> improvements. See [Changes in this fork](#changes-in-this-fork) below for the full list. The
+> package identity was renamed from `com.alelievr.node-graph-processor` to
+> `com.dyonng.node-graph-processor` (folder: `com.dyonng.NodeGraphProcessor`) — see
+> [Installation](#installation) for how to pull this fork into a project instead of the original.
+
 Node graph editor framework focused on data processing using Unity UIElements, GraphView and C# 4.7
 
 [![Discord](https://img.shields.io/discord/823720615965622323.svg)](https://discord.gg/XuMd3Z5Rym)
@@ -18,7 +26,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using GraphProcessor;
-using System.Linq;
 
 [System.Serializable, NodeMenuItem("Operations/Sub")] // Add the node in the node creation context menu
 public class SubNode : BaseNode
@@ -43,8 +50,10 @@ public class SubNode : BaseNode
 
 ## Unity Compatible versions
 
-This project requires at least Unity **2020.2** with a scripting runtime version of 4.x in player settings.  
-The current Unity version used for the project is **2020.2.0f1**, if you want to install NodeGraphProcessor in an older unity project, you can install it via Open UPM (minimum version: Unity **2019.3**).
+This fork requires at least Unity **6000.5** (6.5) — it relies on `Object.GetEntityId()`, which
+replaced the now-deprecated `GetInstanceID()` and isn't available before 6.5. If you need to
+support older Unity versions, use the [upstream project](https://github.com/alelievr/NodeGraphProcessor)
+instead (Unity 2020.2+, or 2019.3+ via OpenUPM).
 
 ## Installation
 
@@ -56,25 +65,50 @@ To install using the package manager:
 
 - download this repo
 - inside the package manager click the '+' button at the bottom to add a package from disk
-- then select the package.json file located in `Assets/NodeGraphProcessor`
+- then select the package.json file located in `Assets/com.dyonng.NodeGraphProcessor`
 - package is installed :)
-
-### Install via OpenUPM
-
-The package is available on the [openupm registry](https://openupm.com). It's recommended to install it via [openupm-cli](https://github.com/openupm/openupm-cli).
-
-```
-openupm add com.alelievr.node-graph-processor
-```
 
 ### Install via Git
 
-Alternatively, you can use the [git address feature in the package manager](https://forum.unity.com/threads/git-support-on-package-manager.573673/) on the branch [#upm](https://github.com/alelievr/NodeGraphProcessor/tree/upm), it only contains the package but it may be out of sync compared to master.
+In the Package Manager, use `Add package from git URL` and paste:
 
-Note that you'll not have access to the examples provided in this repo because the package only include the core of NodeGraphProcessor.
+```
+https://github.com/dyonng/NodeGraphProcessor.git?path=Assets/com.dyonng.NodeGraphProcessor#v1.4.0
+```
+
+The `?path=` points Unity at the package subfolder, and `#v1.4.0` pins to a released tag so your
+install doesn't shift under you when the branch moves. Drop the `#v1.4.0` to track `master`
+directly instead (not recommended for shared projects).
+
+Note that you'll not have access to the examples provided in this repo because the package only include the core of NodeGraphProcessor — see Install Manually above if you want the `Assets/Examples` content too.
 
 </details>
 
+## Changes in this fork
+
+- **Ported to Unity 6.5 (6000.5)** — fixed compile errors from the `GetInstanceID()` →
+  `GetEntityId()` migration and other Unity 6 API changes.
+- **Package identity renamed** from `com.alelievr.node-graph-processor` /
+  `com.alelievr.NodeGraphProcessor` to `com.dyonng.node-graph-processor` /
+  `com.dyonng.NodeGraphProcessor` (folder, `package.json`, assembly names, `InternalsVisibleTo`,
+  and the example graph assets' serialized type references were all updated together so existing
+  graphs still deserialize correctly).
+- **Cherry-picked open upstream PRs**: node-view crash/UX fixes (bad node-view rebind and a crash
+  in `SyncSerializedPropertyPathes` on delete-with-connections, list-item clicks no longer trigger
+  node drag), a node-rename focus-timing fix, and a reflection fix so inherited
+  `[CustomPortTypeBehavior]` methods on base classes are found.
+- **Removed all LINQ usage** across the package (Runtime + Editor, ~130 call sites in 23 files),
+  replaced with explicit loops to cut GC churn — LINQ's iterators, closures, and boxed enumerators
+  were a meaningful allocation source in hot paths like port syncing and graph traversal.
+- **Bug fixes found along the way**: `PortData` was being compared by reference instead of value
+  (`Equals`), causing spurious port-view rebuilds on every sync; `ParameterNode` and
+  `BaseGraphView` leaked event subscriptions on enable/disable and dispose; `RelayNode` could throw
+  on an empty port list; a node-deletion path never removed its view from internal tracking lists.
+- **Performance work**: eliminated a redundant duplicate graph-traversal build on every single edge
+  edit, batched `SerializedObject`/property-path rebinding on multi-element delete (was rebuilding
+  once per deleted element), removed several boxed-enumerator and per-call allocation hot spots in
+  port syncing and edge-dragging, and converted a few iterator methods to eager list builds for
+  better cache locality.
 
 ## Community 
 
