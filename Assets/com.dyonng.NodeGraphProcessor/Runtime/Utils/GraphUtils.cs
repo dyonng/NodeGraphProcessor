@@ -132,5 +132,83 @@ namespace GraphProcessor
 
             cyclicNodes.ForEach((tn) => cyclicNode?.Invoke(tn.node));
         }
+
+        // Combines FindCyclesInGraph + DepthFirstSort into a single traversal-graph build
+        // (each of those builds its own from scratch, which is wasteful when called back to back).
+        internal static List<BaseNode> SortAndFindCycles(BaseGraph g, Action<BaseNode> cyclicNode)
+        {
+            var graph = ConvertGraphToTraversalGraph(g);
+
+            // Pass 1: cycle detection (same logic as FindCyclesInGraph)
+            List<TarversalNode> cyclicNodes = new List<TarversalNode>();
+
+            foreach (var n in graph.nodes)
+                DFSCycle(n);
+
+            void DFSCycle(TarversalNode n)
+            {
+                if (n.state == State.Black)
+                    return;
+
+                n.state = State.Grey;
+
+                foreach (var input in n.inputs)
+                {
+                    if (input.state == State.White)
+                        DFSCycle(input);
+                    else if (input.state == State.Grey)
+                        cyclicNodes.Add(n);
+                }
+                n.state = State.Black;
+            }
+
+            cyclicNodes.ForEach((tn) => cyclicNode?.Invoke(tn.node));
+
+            // Reset traversal state before the second pass
+            foreach (var n in graph.nodes)
+                n.state = State.White;
+
+            // Pass 2: depth-first sort (same logic as DepthFirstSort), reusing the same traversal graph
+            List<BaseNode> depthFirstNodes = new List<BaseNode>();
+
+            foreach (var n in graph.nodes)
+                DFSSort(n);
+
+            void DFSSort(TarversalNode n)
+            {
+                if (n.state == State.Black)
+                    return;
+
+                n.state = State.Grey;
+
+                if (n.node is ParameterNode parameterNode && parameterNode.accessor == ParameterAccessor.Get)
+                {
+                    foreach (var setter in graph.nodes)
+                    {
+                        bool isMatchingSetter = setter.node is ParameterNode p &&
+                            p.parameterGUID == parameterNode.parameterGUID &&
+                            p.accessor == ParameterAccessor.Set;
+
+                        if (isMatchingSetter && setter.state == State.White)
+                            DFSSort(setter);
+                    }
+                }
+                else
+                {
+                    foreach (var input in n.inputs)
+                    {
+                        if (input.state == State.White)
+                            DFSSort(input);
+                    }
+                }
+
+                n.state = State.Black;
+
+                // Only add the node when his children are completely visited
+                depthFirstNodes.Add(n.node);
+            }
+
+            return depthFirstNodes;
+        }
     }
 }

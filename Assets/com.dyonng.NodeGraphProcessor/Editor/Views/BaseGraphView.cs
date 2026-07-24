@@ -131,6 +131,8 @@ namespace GraphProcessor
 
 		public SerializedObject		serializedGraph { get; private set; }
 
+		HashSet<BaseNodeView>		selectionScratchSet = new HashSet<BaseNodeView>();
+
 		Dictionary<Type, (Type nodeType, MethodInfo initalizeNodeFromObject)> nodeTypePerCreateAssetType = new Dictionary<Type, (Type, MethodInfo)>();
 
 		public BaseGraphView(EditorWindow window)
@@ -370,7 +372,7 @@ namespace GraphProcessor
 				});
 
 				//Handle ourselves the edge and node remove
-				changes.elementsToRemove.RemoveAll(e => {
+				int removedCount = changes.elementsToRemove.RemoveAll(e => {
 
 					switch (e)
 					{
@@ -391,31 +393,27 @@ namespace GraphProcessor
 							nodeInspector.NodeViewRemoved(nodeView);
 							ExceptionToLog.Call(() => nodeView.OnRemoved());
 							graph.RemoveNode(nodeView.nodeTarget);
-							UpdateSerializedProperties();
 							RemoveElement(nodeView);
+							nodeViews.Remove(nodeView);
+							nodeViewsPerNode.Remove(nodeView.nodeTarget);
 							if (Selection.activeObject == nodeInspector)
 								UpdateNodeInspectorSelection();
 
-							SyncSerializedPropertyPathes();
 							return true;
 						case GroupView group:
 							graph.RemoveGroup(group.group);
-							UpdateSerializedProperties();
 							RemoveElement(group);
 							return true;
 						case ExposedParameterFieldView blackboardField:
 							graph.RemoveExposedParameter(blackboardField.parameter);
-							UpdateSerializedProperties();
 							return true;
 						case BaseStackNodeView stackNodeView:
 							graph.RemoveStackNode(stackNodeView.stackNode);
-							UpdateSerializedProperties();
 							RemoveElement(stackNodeView);
 							return true;
 #if UNITY_2020_1_OR_NEWER
 						case StickyNoteView stickyNoteView:
 							graph.RemoveStickyNote(stickyNoteView.note);
-							UpdateSerializedProperties();
 							RemoveElement(stickyNoteView);
 							return true;
 #endif
@@ -423,6 +421,14 @@ namespace GraphProcessor
 
 					return false;
 				});
+
+				// Rebuild the serialized properties / rebind node views once for the whole batch
+				// instead of once per removed element (SerializedObject rebuilds are expensive).
+				if (removedCount > 0)
+				{
+					UpdateSerializedProperties();
+					SyncSerializedPropertyPathes();
+				}
 			}
 
 			return changes;
@@ -646,7 +652,8 @@ namespace GraphProcessor
 
 		bool DoesSelectionContainsInspectorNodes()
 		{
-			var selectedNodeViews = new HashSet<BaseNodeView>();
+			var selectedNodeViews = selectionScratchSet;
+			selectedNodeViews.Clear();
 			foreach (var s in selection)
 				if (s is BaseNodeView bnv)
 					selectedNodeViews.Add(bnv);

@@ -801,14 +801,10 @@ namespace GraphProcessor
 
 		void UpdateComputeOrderDepthFirst()
 		{
-			Stack<BaseNode> dfs = new Stack<BaseNode>();
-
-			GraphUtils.FindCyclesInGraph(this, (n) => {
-				PropagateComputeOrder(n, loopComputeOrder);
-			});
-
 			int computeOrder = 0;
-			foreach (var node in GraphUtils.DepthFirstSort(this))
+			foreach (var node in GraphUtils.SortAndFindCycles(this, (n) => {
+				PropagateComputeOrder(n, loopComputeOrder);
+			}))
 			{
 				if (node.computeOrder == loopComputeOrder)
 					continue;

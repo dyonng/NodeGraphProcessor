@@ -1105,7 +1105,7 @@ namespace GraphProcessor
 		}
 
 		// Groups elements by fieldName, preserving order of first occurrence of each key (matches LINQ GroupBy semantics)
-		static List<List<NodePort>> GroupPortsByField(IEnumerable<NodePort> ports)
+		static List<List<NodePort>> GroupPortsByField(List<NodePort> ports)
 		{
 			var order = new List<string>();
 			var map = new Dictionary<string, List<NodePort>>();
@@ -1125,7 +1125,7 @@ namespace GraphProcessor
 			return result;
 		}
 
-		static List<List<PortView>> GroupPortViewsByField(IEnumerable<PortView> portViews)
+		static List<List<PortView>> GroupPortViewsByField(List<PortView> portViews)
 		{
 			var order = new List<string>();
 			var map = new Dictionary<string, List<PortView>>();
@@ -1145,12 +1145,10 @@ namespace GraphProcessor
 			return result;
 		}
 
-		IEnumerable< PortView > SyncPortCounts(IEnumerable< NodePort > ports, IEnumerable< PortView > portViews)
+		List< PortView > SyncPortCounts(List< NodePort > ports, List< PortView > portViews)
 		{
 			var listener = owner.connectorListener;
-			var portViewList = new List<PortView>();
-			foreach (var pv in portViews)
-				portViewList.Add(pv);
+			var portViewList = new List<PortView>(portViews);
 
 			// Maybe not good to remove ports as edges are still connected :/
 			var portViewsToCheck = new List<PortView>(portViewList);
@@ -1197,19 +1195,14 @@ namespace GraphProcessor
 			return portViewList;
 		}
 
-		void SyncPortOrder(IEnumerable< NodePort > ports, IEnumerable< PortView > portViews)
+		void SyncPortOrder(List< NodePort > ports, List< PortView > portViews)
 		{
-			var portViewList = new List<PortView>();
-			foreach (var pv in portViews)
-				portViewList.Add(pv);
-			var portsList = new List<NodePort>();
-			foreach (var p in ports)
-				portsList.Add(p);
+			var portViewList = portViews;
 
 			// Re-order the port views to match the ports order in case a custom behavior re-ordered the ports
-			for (int i = 0; i < portsList.Count; i++)
+			for (int i = 0; i < ports.Count; i++)
 			{
-				var id = portsList[i].portData.identifier;
+				var id = ports[i].portData.identifier;
 
 				PortView pv = null;
 				foreach (var candidate in portViewList)
@@ -1240,9 +1233,9 @@ namespace GraphProcessor
 
 				// When there is no current portviews, we can't zip the list so we just add all
 				if (portViews.Count == 0)
-					SyncPortCounts(ports, new PortView[]{});
+					SyncPortCounts(ports, new List<PortView>());
 				else if (ports.Count == 0) // Same when there is no ports
-					SyncPortCounts(new NodePort[]{}, portViews);
+					SyncPortCounts(new List<NodePort>(), portViews);
 				else if (portViews.Count != ports.Count)
 					SyncPortCounts(ports, portViews);
 				else
@@ -1255,7 +1248,7 @@ namespace GraphProcessor
 					{
 						var portPerFieldName = portGroups[g];
 						var portViewPerFieldName = portViewGroups[g];
-						IEnumerable< PortView > portViewsList = portViewPerFieldName;
+						List< PortView > portViewsList = portViewPerFieldName;
 						if (portPerFieldName.Count != portViewPerFieldName.Count)
 							portViewsList = SyncPortCounts(portPerFieldName, portViewPerFieldName);
 						SyncPortOrder(portPerFieldName, portViewsList);
