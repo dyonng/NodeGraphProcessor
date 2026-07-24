@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Collections.Generic;
 
 namespace GraphProcessor
@@ -47,8 +46,15 @@ namespace GraphProcessor
 
             foreach (var tn in g.nodes)
             {
-                tn.inputs = tn.node.GetInputNodes().Where(n => nodeMap.ContainsKey(n)).Select(n => nodeMap[n]).ToList();
-                tn.outputs = tn.node.GetOutputNodes().Where(n => nodeMap.ContainsKey(n)).Select(n => nodeMap[n]).ToList();
+                tn.inputs = new List<TarversalNode>();
+                foreach (var n in tn.node.GetInputNodes())
+                    if (nodeMap.TryGetValue(n, out var mapped))
+                        tn.inputs.Add(mapped);
+
+                tn.outputs = new List<TarversalNode>();
+                foreach (var n in tn.node.GetOutputNodes())
+                    if (nodeMap.TryGetValue(n, out var mapped))
+                        tn.outputs.Add(mapped);
             }
 
             return g;
@@ -71,12 +77,13 @@ namespace GraphProcessor
 
                 if (n.node is ParameterNode parameterNode && parameterNode.accessor == ParameterAccessor.Get)
                 {
-                    foreach (var setter in graph.nodes.Where(x=> 
-                        x.node is ParameterNode p &&
-                        p.parameterGUID == parameterNode.parameterGUID &&
-                        p.accessor == ParameterAccessor.Set))
+                    foreach (var setter in graph.nodes)
                     {
-                        if (setter.state == State.White)
+                        bool isMatchingSetter = setter.node is ParameterNode p &&
+                            p.parameterGUID == parameterNode.parameterGUID &&
+                            p.accessor == ParameterAccessor.Set;
+
+                        if (isMatchingSetter && setter.state == State.White)
                             DFS(setter);
                     }
                 }

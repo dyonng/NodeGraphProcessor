@@ -1,7 +1,6 @@
 using UnityEditor;
 using System.Collections.Generic;
 using System;
-using System.Linq;
 using UnityEngine;
 
 namespace GraphProcessor
@@ -14,7 +13,15 @@ namespace GraphProcessor
         {
             foreach (var t in TypeCache.GetTypesWithAttribute<CustomStackNodeView>())
             {
-                var attr = t.GetCustomAttributes(false).Select(a => a as CustomStackNodeView).FirstOrDefault();
+                CustomStackNodeView attr = null;
+                foreach (var a in t.GetCustomAttributes(false))
+                {
+                    if (a is CustomStackNodeView csn)
+                    {
+                        attr = csn;
+                        break;
+                    }
+                }
 
                 stackNodeViewPerType.Add(attr.stackNodeType, t);
                 // Debug.Log("Add " + attr.stackNodeType);

@@ -6,7 +6,6 @@ using UnityEditor;
 using System.Reflection;
 using System;
 using System.Collections;
-using System.Linq;
 using UnityEditor.UIElements;
 using System.Text.RegularExpressions;
 
@@ -345,14 +344,22 @@ namespace GraphProcessor
 
 		public PortView GetFirstPortViewFromFieldName(string fieldName)
 		{
-			return GetPortViewsFromFieldName(fieldName)?.First();
+			var list = GetPortViewsFromFieldName(fieldName);
+			return list?[0];
 		}
 
 		public PortView GetPortViewFromFieldName(string fieldName, string identifier)
 		{
-			return GetPortViewsFromFieldName(fieldName)?.FirstOrDefault(pv => {
-				return (pv.portData.identifier == identifier) || (String.IsNullOrEmpty(pv.portData.identifier) && String.IsNullOrEmpty(identifier));
-			});
+			var list = GetPortViewsFromFieldName(fieldName);
+			if (list == null)
+				return null;
+
+			foreach (var pv in list)
+			{
+				if ((pv.portData.identifier == identifier) || (String.IsNullOrEmpty(pv.portData.identifier) && String.IsNullOrEmpty(identifier)))
+					return pv;
+			}
+			return null;
 		}
 
 
@@ -417,7 +424,7 @@ namespace GraphProcessor
 		public void RemovePort(PortView p)
 		{
 			// Remove all connected edges:
-			var edgesCopy = p.GetEdges().ToList();
+			var edgesCopy = new List<EdgeView>(p.GetEdges());
 			foreach (var e in edgesCopy)
 				owner.Disconnect(e, refreshPorts: false);
 
@@ -671,12 +678,16 @@ namespace GraphProcessor
 
 		protected virtual void DrawDefaultInspector(bool fromInspector = false)
 		{
-			var fields = nodeTarget.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-				// Filter fields from the BaseNode type since we are only interested in user-defined fields
-				// (better than BindingFlags.DeclaredOnly because we keep any inherited user-defined fields) 
-				.Where(f => f.DeclaringType != typeof(BaseNode));
+			var allDeclaredFields = nodeTarget.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+			// Filter fields from the BaseNode type since we are only interested in user-defined fields
+			// (better than BindingFlags.DeclaredOnly because we keep any inherited user-defined fields)
+			var userFields = new List<FieldInfo>();
+			foreach (var f in allDeclaredFields)
+				if (f.DeclaringType != typeof(BaseNode))
+					userFields.Add(f);
 
-			fields = nodeTarget.OverrideFieldOrder(fields).Reverse();
+			var fields = new List<FieldInfo>(nodeTarget.OverrideFieldOrder(userFields));
+			fields.Reverse();
 
 			foreach (var field in fields)
 			{
@@ -738,8 +749,19 @@ namespace GraphProcessor
 
 					// Hide the field right away if there is already a connection:
 					if (portsPerFieldName.TryGetValue(field.Name, out var pvs))
-						if (pvs.Any(pv => pv.GetEdges().Count > 0))
+					{
+						bool anyConnected = false;
+						foreach (var pv in pvs)
+						{
+							if (pv.GetEdges().Count > 0)
+							{
+								anyConnected = true;
+								break;
+							}
+						}
+						if (anyConnected)
 							elem.style.display = DisplayStyle.None;
+					}
 				}
 			}
 		}
@@ -1082,17 +1104,70 @@ namespace GraphProcessor
 			return Status.Disabled;
 		}
 
+		// Groups elements by fieldName, preserving order of first occurrence of each key (matches LINQ GroupBy semantics)
+		static List<List<NodePort>> GroupPortsByField(IEnumerable<NodePort> ports)
+		{
+			var order = new List<string>();
+			var map = new Dictionary<string, List<NodePort>>();
+			foreach (var port in ports)
+			{
+				if (!map.TryGetValue(port.fieldName, out var list))
+				{
+					list = new List<NodePort>();
+					map[port.fieldName] = list;
+					order.Add(port.fieldName);
+				}
+				list.Add(port);
+			}
+			var result = new List<List<NodePort>>(order.Count);
+			foreach (var key in order)
+				result.Add(map[key]);
+			return result;
+		}
+
+		static List<List<PortView>> GroupPortViewsByField(IEnumerable<PortView> portViews)
+		{
+			var order = new List<string>();
+			var map = new Dictionary<string, List<PortView>>();
+			foreach (var pv in portViews)
+			{
+				if (!map.TryGetValue(pv.fieldName, out var list))
+				{
+					list = new List<PortView>();
+					map[pv.fieldName] = list;
+					order.Add(pv.fieldName);
+				}
+				list.Add(pv);
+			}
+			var result = new List<List<PortView>>(order.Count);
+			foreach (var key in order)
+				result.Add(map[key]);
+			return result;
+		}
+
 		IEnumerable< PortView > SyncPortCounts(IEnumerable< NodePort > ports, IEnumerable< PortView > portViews)
 		{
 			var listener = owner.connectorListener;
-			var portViewList = portViews.ToList();
+			var portViewList = new List<PortView>();
+			foreach (var pv in portViews)
+				portViewList.Add(pv);
 
 			// Maybe not good to remove ports as edges are still connected :/
-			foreach (var pv in portViews.ToList())
+			var portViewsToCheck = new List<PortView>(portViewList);
+			foreach (var pv in portViewsToCheck)
 			{
 				// If the port have disappeared from the node data, we remove the view:
 				// We can use the identifier here because this function will only be called when there is a custom port behavior
-				if (!ports.Any(p => p.portData.identifier == pv.portData.identifier))
+				bool stillExists = false;
+				foreach (var port in ports)
+				{
+					if (port.portData.identifier == pv.portData.identifier)
+					{
+						stillExists = true;
+						break;
+					}
+				}
+				if (!stillExists)
 				{
 					RemovePort(pv);
 					portViewList.Remove(pv);
@@ -1102,11 +1177,20 @@ namespace GraphProcessor
 			foreach (var p in ports)
 			{
 				// Add missing port views
-				if (!portViews.Any(pv => p.portData.identifier == pv.portData.identifier))
+				bool alreadyExists = false;
+				foreach (var pv in portViews)
+				{
+					if (p.portData.identifier == pv.portData.identifier)
+					{
+						alreadyExists = true;
+						break;
+					}
+				}
+				if (!alreadyExists)
 				{
 					Direction portDirection = nodeTarget.IsFieldInput(p.fieldName) ? Direction.Input : Direction.Output;
-					var pv = AddPort(p.fieldInfo, portDirection, listener, p.portData);
-					portViewList.Add(pv);
+					var newPv = AddPort(p.fieldInfo, portDirection, listener, p.portData);
+					portViewList.Add(newPv);
 				}
 			}
 
@@ -1115,15 +1199,27 @@ namespace GraphProcessor
 
 		void SyncPortOrder(IEnumerable< NodePort > ports, IEnumerable< PortView > portViews)
 		{
-			var portViewList = portViews.ToList();
-			var portsList = ports.ToList();
+			var portViewList = new List<PortView>();
+			foreach (var pv in portViews)
+				portViewList.Add(pv);
+			var portsList = new List<NodePort>();
+			foreach (var p in ports)
+				portsList.Add(p);
 
 			// Re-order the port views to match the ports order in case a custom behavior re-ordered the ports
 			for (int i = 0; i < portsList.Count; i++)
 			{
 				var id = portsList[i].portData.identifier;
 
-				var pv = portViewList.FirstOrDefault(p => p.portData.identifier == id);
+				PortView pv = null;
+				foreach (var candidate in portViewList)
+				{
+					if (candidate.portData.identifier == id)
+					{
+						pv = candidate;
+						break;
+					}
+				}
 				if (pv != null)
 					InsertPort(pv, i);
 			}
@@ -1151,16 +1247,19 @@ namespace GraphProcessor
 					SyncPortCounts(ports, portViews);
 				else
 				{
-					var p = ports.GroupBy(n => n.fieldName);
-					var pv = portViews.GroupBy(v => v.fieldName);
-					p.Zip(pv, (portPerFieldName, portViewPerFieldName) => {
+					var portGroups = GroupPortsByField(ports);
+					var portViewGroups = GroupPortViewsByField(portViews);
+
+					int zipCount = Math.Min(portGroups.Count, portViewGroups.Count);
+					for (int g = 0; g < zipCount; g++)
+					{
+						var portPerFieldName = portGroups[g];
+						var portViewPerFieldName = portViewGroups[g];
 						IEnumerable< PortView > portViewsList = portViewPerFieldName;
-						if (portPerFieldName.Count() != portViewPerFieldName.Count())
+						if (portPerFieldName.Count != portViewPerFieldName.Count)
 							portViewsList = SyncPortCounts(portPerFieldName, portViewPerFieldName);
 						SyncPortOrder(portPerFieldName, portViewsList);
-						// We don't care about the result, we just iterate over port and portView
-						return "";
-					}).ToList();
+					}
 				}
 
 				// Here we're sure that we have the same amount of port and portView

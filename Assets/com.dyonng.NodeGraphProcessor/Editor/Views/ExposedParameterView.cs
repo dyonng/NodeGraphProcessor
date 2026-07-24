@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine.UIElements;
-using System.Linq;
 using System;
 
 namespace GraphProcessor
@@ -58,9 +57,17 @@ namespace GraphProcessor
             // Generate unique name
             string uniqueName = name;
             int i = 0;
-            while (graphView.graph.exposedParameters.Any(e => e.name == name))
+            while (NameIsUsed(name))
                 name = uniqueName + " " + i++;
             return name;
+
+            bool NameIsUsed(string candidate)
+            {
+                foreach (var e in graphView.graph.exposedParameters)
+                    if (e.name == candidate)
+                        return true;
+                return false;
+            }
         }
 
         protected virtual IEnumerable< Type > GetExposedParameterTypes()
@@ -118,7 +125,9 @@ namespace GraphProcessor
 
         void OnMouseDownEvent(MouseDownEvent evt)
         {
-            blackboardLayouts = content.Children().Select(c => c.layout).ToList();
+            blackboardLayouts = new List<Rect>();
+            foreach (var c in content.Children())
+                blackboardLayouts.Add(c.layout);
         }
 
         int GetInsertIndexFromMousePosition(Vector2 pos)
@@ -155,7 +164,17 @@ namespace GraphProcessor
                 if (obj is ExposedParameterFieldView view)
                 {
                     var blackBoardRow = view.parent.parent.parent.parent.parent.parent;
-                    int oldIndex = content.Children().ToList().FindIndex(c => c == blackBoardRow);
+                    int oldIndex = -1;
+                    int childIndex = 0;
+                    foreach (var c in content.Children())
+                    {
+                        if (c == blackBoardRow)
+                        {
+                            oldIndex = childIndex;
+                            break;
+                        }
+                        childIndex++;
+                    }
                     // Try to find the blackboard row
                     content.Remove(blackBoardRow);
 

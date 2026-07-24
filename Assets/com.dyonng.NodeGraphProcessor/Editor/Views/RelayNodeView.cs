@@ -2,8 +2,8 @@
 using UnityEngine.UIElements;
 using GraphProcessor;
 using UnityEditor;
-using System.Linq;
 using System;
+using System.Collections.Generic;
 using UnityEditor.Experimental.GraphView;
 
 [NodeCustomEditor(typeof(RelayNode))]
@@ -114,9 +114,9 @@ public class RelayNodeView : BaseNodeView
 				if (inputEdges.Count == 0 || outputEdges.Count == 0)
 					return;
 
-				var inputEdge = inputEdges.First();
+				var inputEdge = inputEdges[0];
 
-				foreach (var outputEdge in outputEdges.ToList())
+				foreach (var outputEdge in new List<EdgeView>(outputEdges))
 				{
 					var input = outputEdge.input as PortView;
 					var output = inputEdge.output as PortView;

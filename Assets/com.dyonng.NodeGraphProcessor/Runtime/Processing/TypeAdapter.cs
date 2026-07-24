@@ -2,7 +2,6 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Linq;
 
 namespace GraphProcessor
 {
@@ -116,8 +115,9 @@ namespace GraphProcessor
 
         public static bool AreIncompatible(Type from, Type to)
         {
-            if (incompatibleTypes.Any((k) => k.from == from && k.to == to))
-                return true;
+            foreach (var k in incompatibleTypes)
+                if (k.from == from && k.to == to)
+                    return true;
             return false;
         }
 

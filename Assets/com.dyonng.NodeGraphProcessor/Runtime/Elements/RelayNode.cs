@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using GraphProcessor;
-using System.Linq;
 using System;
 
 [System.Serializable, NodeMenuItem("Utils/Relay")]
@@ -48,16 +47,22 @@ public class RelayNode : BaseNode
 		inputEdgeCount = edges.Count;
 
 		// If the relay is only connected to another relay:
-		if (edges.Count == 1 && edges.First().outputNode.GetType() == typeof(RelayNode))
+		if (edges.Count == 1 && edges[0].outputNode.GetType() == typeof(RelayNode))
 		{
-			if (edges.First().passThroughBuffer != null)
-				input = (PackedRelayData)edges.First().passThroughBuffer;
+			if (edges[0].passThroughBuffer != null)
+				input = (PackedRelayData)edges[0].passThroughBuffer;
 		}
 		else
 		{
-			input.values = edges.Select(e => e.passThroughBuffer).ToList();
-			input.names = edges.Select(e => e.outputPort.portData.displayName).ToList();
-			input.types = edges.Select(e => e.outputPort.portData.displayType ?? e.outputPort.fieldInfo.FieldType).ToList();
+			input.values = new List<object>(edges.Count);
+			input.names = new List<string>(edges.Count);
+			input.types = new List<Type>(edges.Count);
+			foreach (var e in edges)
+			{
+				input.values.Add(e.passThroughBuffer);
+				input.names.Add(e.outputPort.portData.displayName);
+				input.types.Add(e.outputPort.portData.displayType ?? e.outputPort.fieldInfo.FieldType);
+			}
 		}
 	}
 
@@ -101,7 +106,8 @@ public class RelayNode : BaseNode
 		{
 			// Add the size of all input edges:
 			var inputEdges = inputPorts[0]?.GetEdges();
-			sizeInPixel = inputEdges.Sum(e => Mathf.Max(0, e.outputPort.portData.sizeInPixel - 8));
+			foreach (var e in inputEdges)
+				sizeInPixel += Mathf.Max(0, e.outputPort.portData.sizeInPixel - 8);
 		}
 		
 		if (edges.Count == 1 && !packInput)
@@ -180,18 +186,26 @@ public class RelayNode : BaseNode
 		var inputEdges = GetNonRelayEdges();
 
 		if (inputEdges != null)
-			return inputEdges.Select(e => (e.outputPort.portData.displayType ?? e.outputPort.fieldInfo.FieldType, e.outputPort.portData.displayName)).ToList();
+		{
+			var result = new List<(Type type, string name)>(inputEdges.Count);
+			foreach (var e in inputEdges)
+				result.Add((e.outputPort.portData.displayType ?? e.outputPort.fieldInfo.FieldType, e.outputPort.portData.displayName));
+			return result;
+		}
 
 		return s_empty;
 	}
 
 	public List<SerializableEdge> GetNonRelayEdges()
 	{
-		var inputEdges = inputPorts?[0]?.GetEdges();
+		if (inputPorts == null || inputPorts.Count == 0)
+			return null;
+
+		var inputEdges = inputPorts[0]?.GetEdges();
 
 		// Iterate until we don't have a relay node in input
-		while (inputEdges.Count == 1 && inputEdges.First().outputNode.GetType() == typeof(RelayNode))
-			inputEdges = inputEdges.First().outputNode.inputPorts[0]?.GetEdges();
+		while (inputEdges.Count == 1 && inputEdges[0].outputNode.GetType() == typeof(RelayNode))
+			inputEdges = inputEdges[0].outputNode.inputPorts[0]?.GetEdges();
 
 		return inputEdges;
 	}

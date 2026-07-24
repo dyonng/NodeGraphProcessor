@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using UnityEngine;
 using UnityEditor.UIElements;
@@ -59,10 +58,28 @@ namespace GraphProcessor
             return tree;
         }
 
+        // Stable sort by string key (matches LINQ OrderBy's stability + default culture-sensitive string comparison)
+        static List<T> StableSortByPath<T>(List<T> items, Func<T, string> keySelector)
+        {
+            var indices = new int[items.Count];
+            for (int i = 0; i < indices.Length; i++)
+                indices[i] = i;
+
+            Array.Sort(indices, (a, b) => {
+                int cmp = String.Compare(keySelector(items[a]), keySelector(items[b]));
+                return cmp != 0 ? cmp : a.CompareTo(b);
+            });
+
+            var result = new List<T>(items.Count);
+            foreach (var idx in indices)
+                result.Add(items[idx]);
+            return result;
+        }
+
         void CreateStandardNodeMenu(List<SearchTreeEntry> tree)
         {
             // Sort menu by alphabetical order and submenus
-            var nodeEntries = graphView.FilterCreateNodeMenuEntries().OrderBy(k => k.path);
+            var nodeEntries = StableSortByPath(new List<(string path, Type type)>(graphView.FilterCreateNodeMenuEntries()), k => k.path);
             var titlePaths = new HashSet< string >();
             
 			foreach (var nodeMenuItem in nodeEntries)
@@ -109,7 +126,15 @@ namespace GraphProcessor
 
             var titlePaths = new HashSet< string >();
 
-            var nodePaths = NodeProvider.GetNodeMenuEntries(graphView.graph);
+            var nodePaths = new List<(string path, Type type)>(NodeProvider.GetNodeMenuEntries(graphView.graph));
+
+            string FindPathForType(Type nodeType)
+            {
+                foreach (var kp in nodePaths)
+                    if (kp.type == nodeType)
+                        return kp.path;
+                return null;
+            }
 
             tree.Add(new SearchTreeEntry(new GUIContent($"Relay", icon))
             {
@@ -124,12 +149,15 @@ namespace GraphProcessor
                 }
             });
 
-            var sortedMenuItems = entries.Select(port => (port, nodePaths.FirstOrDefault(kp => kp.type == port.nodeType).path)).OrderBy(e => e.path);
+            var unsortedMenuItems = new List<(NodeProvider.PortDescription port, string path)>();
+            foreach (var port in entries)
+                unsortedMenuItems.Add((port, FindPathForType(port.nodeType)));
+            var sortedMenuItems = StableSortByPath(unsortedMenuItems, e => e.path);
 
             // Sort menu by alphabetical order and submenus
 			foreach (var nodeMenuItem in sortedMenuItems)
 			{
-                var nodePath = nodePaths.FirstOrDefault(kp => kp.type == nodeMenuItem.port.nodeType).path;
+                var nodePath = nodeMenuItem.path;
 
                 // Ignore the node if it's not in the create menu
                 if (String.IsNullOrEmpty(nodePath))

@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine.UIElements;
-using System.Linq;
 
 namespace GraphProcessor
 {

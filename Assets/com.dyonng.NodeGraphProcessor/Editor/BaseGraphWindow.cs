@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using System;
+﻿using System;
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.UIElements;
@@ -106,7 +105,15 @@ namespace GraphProcessor
 			//Initialize will provide the BaseGraphView
 			InitializeWindow(graph);
 
-			graphView = rootView.Children().FirstOrDefault(e => e is BaseGraphView) as BaseGraphView;
+			graphView = null;
+			foreach (var e in rootView.Children())
+			{
+				if (e is BaseGraphView bgv)
+				{
+					graphView = bgv;
+					break;
+				}
+			}
 
 			if (graphView == null)
 			{

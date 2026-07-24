@@ -5,7 +5,6 @@ using UnityEditor.Experimental.GraphView;
 using UnityEditor.UIElements;
 using UnityEngine.UIElements;
 using UnityEditor;
-using System.Linq;
 using System;
 
 using Status = UnityEngine.UIElements.DropdownMenuAction.Status;
@@ -142,11 +141,12 @@ namespace GraphProcessor
 		/// <param name="name">Display name of the button</param>
 		protected void HideButton(string name)
 		{
-			leftButtonDatas.Concat(rightButtonDatas).All(b => {
+			foreach (var b in leftButtonDatas)
 				if (b?.content?.text == name)
 					b.visible = false;
-				return true;
-			});
+			foreach (var b in rightButtonDatas)
+				if (b?.content?.text == name)
+					b.visible = false;
 		}
 
 		/// <summary>
@@ -155,11 +155,12 @@ namespace GraphProcessor
 		/// <param name="name">Display name of the button</param>
 		protected void ShowButton(string name)
 		{
-			leftButtonDatas.Concat(rightButtonDatas).All(b => {
+			foreach (var b in leftButtonDatas)
 				if (b?.content?.text == name)
 					b.visible = true;
-				return true;
-			});
+			foreach (var b in rightButtonDatas)
+				if (b?.content?.text == name)
+					b.visible = true;
 		}
 
 		protected virtual void AddButtons()
@@ -184,7 +185,7 @@ namespace GraphProcessor
 
 		void DrawImGUIButtonList(List< ToolbarButtonData > buttons)
 		{
-			foreach (var button in buttons.ToList())
+			foreach (var button in new List<ToolbarButtonData>(buttons))
 			{
 				if (!button.visible)
 					continue;

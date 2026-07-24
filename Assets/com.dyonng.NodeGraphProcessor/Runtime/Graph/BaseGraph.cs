@@ -1,6 +1,5 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using System;
 using UnityEngine.Serialization;
@@ -183,13 +182,15 @@ namespace GraphProcessor
 			nodes.RemoveAll(n => n == null);
 			exposedParameters.RemoveAll(e => e == null);
 
-			foreach (var node in nodes.ToList())
+			var nodesCopy = new List<BaseNode>(nodes);
+			foreach (var node in nodesCopy)
 			{
 				nodesPerGUID[node.GUID] = node;
 				node.Initialize(this);
 			}
 
-			foreach (var edge in edges.ToList())
+			var edgesCopy = new List<SerializableEdge>(edges);
+			foreach (var edge in edgesCopy)
 			{
 				edge.Deserialize();
 				edgesPerGUID[edge.GUID] = edge;
@@ -263,7 +264,7 @@ namespace GraphProcessor
 			//If the input port does not support multi-connection, we remove them
 			if (autoDisconnectInputs && !inputPort.portData.acceptMultipleEdges)
 			{
-				foreach (var e in inputPort.GetEdges().ToList())
+				foreach (var e in new List<SerializableEdge>(inputPort.GetEdges()))
 				{
 					// TODO: do not disconnect them if the connected port is the same than the old connected
 					Disconnect(e);
@@ -272,7 +273,7 @@ namespace GraphProcessor
 			// same for the output port:
 			if (autoDisconnectInputs && !outputPort.portData.acceptMultipleEdges)
 			{
-				foreach (var e in outputPort.GetEdges().ToList())
+				foreach (var e in new List<SerializableEdge>(outputPort.GetEdges()))
 				{
 					// TODO: do not disconnect them if the connected port is the same than the old connected
 					Disconnect(e);
@@ -472,7 +473,8 @@ namespace GraphProcessor
 			if (serializedNodes.Count > 0)
 			{
 				nodes.Clear();
-				foreach (var serializedNode in serializedNodes.ToList())
+				var serializedNodesCopy = new List<JsonElement>(serializedNodes);
+				foreach (var serializedNode in serializedNodesCopy)
 				{
                     var node = JsonSerializer.DeserializeNode(serializedNode) as BaseNode;
                     if (node != null)
@@ -481,7 +483,7 @@ namespace GraphProcessor
 				serializedNodes.Clear();
 
 				// we also migrate parameters here:
-				var paramsToMigrate = serializedParameterList.ToList();
+				var paramsToMigrate = new List<ExposedParameter>(serializedParameterList);
 				exposedParameters.Clear();
 				foreach (var param in paramsToMigrate)
 				{
@@ -517,7 +519,13 @@ namespace GraphProcessor
 			graphOutputs.Clear();
 			foreach (var node in nodes)
 			{
-				if (node.GetOutputNodes().Count() == 0)
+				bool hasOutputNodes = false;
+				foreach (var _ in node.GetOutputNodes())
+				{
+					hasOutputNodes = true;
+					break;
+				}
+				if (!hasOutputNodes)
 					graphOutputs.Add(node);
 				node.computeOrder = 0;
 			}
@@ -659,7 +667,10 @@ namespace GraphProcessor
 		/// <returns>the parameter or null</returns>
 		public ExposedParameter GetExposedParameter(string name)
 		{
-			return exposedParameters.FirstOrDefault(e => e.name == name);
+			foreach (var e in exposedParameters)
+				if (e.name == name)
+					return e;
+			return null;
 		}
 
 		/// <summary>
@@ -669,7 +680,10 @@ namespace GraphProcessor
 		/// <returns>The parameter</returns>
 		public ExposedParameter GetExposedParameterFromGUID(string guid)
 		{
-			return exposedParameters.FirstOrDefault(e => e?.guid == guid);
+			foreach (var e in exposedParameters)
+				if (e?.guid == guid)
+					return e;
+			return null;
 		}
 
 		/// <summary>
@@ -680,7 +694,15 @@ namespace GraphProcessor
 		/// <returns>true if the value have been assigned</returns>
 		public bool SetParameterValue(string name, object value)
 		{
-			var e = exposedParameters.FirstOrDefault(p => p.name == name);
+			ExposedParameter e = null;
+			foreach (var p in exposedParameters)
+			{
+				if (p.name == name)
+				{
+					e = p;
+					break;
+				}
+			}
 
 			if (e == null)
 				return false;
@@ -695,7 +717,13 @@ namespace GraphProcessor
 		/// </summary>
 		/// <param name="name">parameter name</param>
 		/// <returns>value</returns>
-		public object GetParameterValue(string name) => exposedParameters.FirstOrDefault(p => p.name == name)?.value;
+		public object GetParameterValue(string name)
+		{
+			foreach (var p in exposedParameters)
+				if (p.name == name)
+					return p.value;
+			return null;
+		}
 
 		/// <summary>
 		/// Get the parameter value template

@@ -2,7 +2,6 @@
 using UnityEngine;
 using UnityEditor;
 using System;
-using System.Linq;
 using System.IO;
 using System.Reflection;
 using UnityEditor.Experimental.GraphView;
@@ -104,7 +103,19 @@ namespace GraphProcessor
 
 			foreach (var field in nodeType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
 			{
-				if (field.GetCustomAttribute<HideInInspector>() == null && field.GetCustomAttributes().Any(c => c is InputAttribute || c is OutputAttribute))
+				if (field.GetCustomAttribute<HideInInspector>() != null)
+					continue;
+
+				bool hasInputOrOutput = false;
+				foreach (var c in field.GetCustomAttributes())
+				{
+					if (c is InputAttribute || c is OutputAttribute)
+					{
+						hasInputOrOutput = true;
+						break;
+					}
+				}
+				if (hasInputOrOutput)
 					targetDescription.slotTypes.Add(field.FieldType);
 			}
 
@@ -116,23 +127,31 @@ namespace GraphProcessor
 			if (nodeType.IsAbstract)
 				return false;
 
-			return nodeType.GetCustomAttributes<NodeMenuItemAttribute>().Count() > 0;
+			foreach (var attr in nodeType.GetCustomAttributes<NodeMenuItemAttribute>())
+				return true;
+			return false;
 		}
 
 		// Check if node has anything that depends on the graph type or settings
 		static bool IsNodeSpecificToGraph(Type nodeType)
 		{
-			var isCompatibleWithGraphMethods = nodeType.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy).Where(m => m.GetCustomAttribute<IsCompatibleWithGraph>() != null);
+			var allMethods = nodeType.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
 			var nodeMenuAttributes = nodeType.GetCustomAttributes<NodeMenuItemAttribute>();
 
-			List<Type> compatibleGraphTypes = nodeMenuAttributes.Where(n => n.onlyCompatibleWithGraph != null).Select(a => a.onlyCompatibleWithGraph).ToList();
+			List<Type> compatibleGraphTypes = new List<Type>();
+			foreach (var n in nodeMenuAttributes)
+				if (n.onlyCompatibleWithGraph != null)
+					compatibleGraphTypes.Add(n.onlyCompatibleWithGraph);
 
 			List<MethodInfo> compatibleMethods = new List<MethodInfo>();
-			foreach (var method in isCompatibleWithGraphMethods)
+			foreach (var method in allMethods)
 			{
+				if (method.GetCustomAttribute<IsCompatibleWithGraph>() == null)
+					continue;
+
 				// Check if the method is static and have the correct prototype
 				var p = method.GetParameters();
-				if (method.ReturnType != typeof(bool) || p.Count() != 1 || p[0].ParameterType != typeof(BaseGraph))
+				if (method.ReturnType != typeof(bool) || p.Length != 1 || p[0].ParameterType != typeof(BaseGraph))
 					Debug.LogError($"The function '{method.Name}' marked with the IsCompatibleWithGraph attribute either doesn't return a boolean or doesn't take one parameter of BaseGraph type.");
 				else
 					compatibleMethods.Add(method);
@@ -219,7 +238,7 @@ namespace GraphProcessor
 
 			if (attrs != null && attrs.Length > 0)
 			{
-				Type nodeType = attrs.First().nodeType;
+				Type nodeType = attrs[0].nodeType;
 				nodeViewPerType[nodeType] = type;
 
 				var nodeViewScriptAsset = FindScriptFromClassName(type.Name);

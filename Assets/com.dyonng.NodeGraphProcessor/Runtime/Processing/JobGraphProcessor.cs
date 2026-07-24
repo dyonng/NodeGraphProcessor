@@ -1,7 +1,7 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 using Unity.Jobs;
 using Unity.Collections;
 // using Unity.Entities;
@@ -35,11 +35,28 @@ namespace GraphProcessor
 
 		public override void UpdateComputeOrder()
 		{
-			scheduleList = graph.nodes.OrderBy(n => n.computeOrder).Select(n => {
+			var nodesArray = graph.nodes.ToArray();
+			var indices = new int[nodesArray.Length];
+			for (int i = 0; i < indices.Length; i++)
+				indices[i] = i;
+
+			// Stable sort by computeOrder (ties keep original order)
+			Array.Sort(indices, (a, b) => {
+				int cmp = nodesArray[a].computeOrder.CompareTo(nodesArray[b].computeOrder);
+				return cmp != 0 ? cmp : a.CompareTo(b);
+			});
+
+			scheduleList = new GraphScheduleList[indices.Length];
+			for (int i = 0; i < indices.Length; i++)
+			{
+				var n = nodesArray[indices[i]];
 				GraphScheduleList gsl = new GraphScheduleList(n);
-				gsl.dependencies = n.GetInputNodes().ToArray();
-				return gsl;
-			}).ToArray();
+				var inputNodes = new List<BaseNode>();
+				foreach (var dep in n.GetInputNodes())
+					inputNodes.Add(dep);
+				gsl.dependencies = inputNodes.ToArray();
+				scheduleList[i] = gsl;
+			}
 		}
 
 		/// <summary>

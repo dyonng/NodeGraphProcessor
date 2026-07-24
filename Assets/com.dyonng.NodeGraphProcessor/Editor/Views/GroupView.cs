@@ -4,7 +4,6 @@ using UnityEditor.UIElements;
 using UnityEngine.UIElements;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace GraphProcessor
 {
@@ -52,7 +51,7 @@ namespace GraphProcessor
 
         void InitializeInnerNodes()
         {
-            foreach (var nodeGUID in group.innerNodeGUIDs.ToList())
+            foreach (var nodeGUID in new List<string>(group.innerNodeGUIDs))
             {
                 if (!owner.graph.nodesPerGUID.ContainsKey(nodeGUID))
                 {

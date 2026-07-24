@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine.UIElements;
 using UnityEditor.Experimental.GraphView;
-using System.Linq;
 using System;
 using UnityEditor.SceneManagement;
 using System.Reflection;
@@ -174,20 +173,35 @@ namespace GraphProcessor
 
 		protected override bool canCopySelection
 		{
-            get { return selection.Any(e => e is BaseNodeView || e is GroupView); }
+            get
+            {
+                foreach (var e in selection)
+                    if (e is BaseNodeView || e is GroupView)
+                        return true;
+                return false;
+            }
 		}
 
 		protected override bool canCutSelection
 		{
-            get { return selection.Any(e => e is BaseNodeView || e is GroupView); }
+            get
+            {
+                foreach (var e in selection)
+                    if (e is BaseNodeView || e is GroupView)
+                        return true;
+                return false;
+            }
 		}
 
 		string SerializeGraphElementsCallback(IEnumerable<GraphElement> elements)
 		{
 			var data = new CopyPasteHelper();
 
-			foreach (BaseNodeView nodeView in elements.Where(e => e is BaseNodeView))
+			foreach (var e in elements)
 			{
+				if (!(e is BaseNodeView nodeView))
+					continue;
+
 				data.copiedNodes.Add(JsonSerializer.SerializeNode(nodeView.nodeTarget));
 				foreach (var port in nodeView.nodeTarget.GetAllPorts())
 				{
@@ -199,11 +213,13 @@ namespace GraphProcessor
 				}
 			}
 
-			foreach (GroupView groupView in elements.Where(e => e is GroupView))
-				data.copiedGroups.Add(JsonSerializer.Serialize(groupView.group));
+			foreach (var e in elements)
+				if (e is GroupView groupView)
+					data.copiedGroups.Add(JsonSerializer.Serialize(groupView.group));
 
-			foreach (EdgeView edgeView in elements.Where(e => e is EdgeView))
-				data.copiedEdges.Add(JsonSerializer.Serialize(edgeView.serializedEdge));
+			foreach (var e in elements)
+				if (e is EdgeView edgeView)
+					data.copiedEdges.Add(JsonSerializer.Serialize(edgeView.serializedEdge));
 
 			ClearSelection();
 
@@ -227,7 +243,9 @@ namespace GraphProcessor
 
 			Dictionary<string, BaseNode> copiedNodesMap = new Dictionary<string, BaseNode>();
 
-			var unserializedGroups = data.copiedGroups.Select(g => JsonSerializer.Deserialize<Group>(g)).ToList();
+			var unserializedGroups = new List<Group>();
+			foreach (var g in data.copiedGroups)
+				unserializedGroups.Add(JsonSerializer.Deserialize<Group>(g));
 
 			foreach (var serializedNode in data.copiedNodes)
 			{
@@ -240,7 +258,15 @@ namespace GraphProcessor
 				graph.nodesPerGUID.TryGetValue(sourceGUID, out var sourceNode);
 				//Call OnNodeCreated on the new fresh copied node
 				node.createdFromDuplication = true;
-				node.createdWithinGroup = unserializedGroups.Any(g => g.innerNodeGUIDs.Contains(sourceGUID));
+				node.createdWithinGroup = false;
+				foreach (var g in unserializedGroups)
+				{
+					if (g.innerNodeGUIDs.Contains(sourceGUID))
+					{
+						node.createdWithinGroup = true;
+						break;
+					}
+				}
 				node.OnNodeCreated();
 				//And move a bit the new node
 				node.position.position += new Vector2(20, 20);
@@ -264,7 +290,7 @@ namespace GraphProcessor
 				// try to centre the created node in the screen
                 group.position.position += new Vector2(20, 20);
 
-				var oldGUIDList = group.innerNodeGUIDs.ToList();
+				var oldGUIDList = new List<string>(group.innerNodeGUIDs);
 				group.innerNodeGUIDs.Clear();
 				foreach (var guid in oldGUIDList)
 				{
@@ -353,9 +379,13 @@ namespace GraphProcessor
 							return true;
 						case BaseNodeView nodeView:
 							// For vertical nodes, we need to delete them ourselves as it's not handled by GraphView
-							foreach (var pv in nodeView.inputPortViews.Concat(nodeView.outputPortViews))
+							foreach (var pv in nodeView.inputPortViews)
 								if (pv.orientation == Orientation.Vertical)
-									foreach (var edge in pv.GetEdges().ToList())
+									foreach (var edge in new List<EdgeView>(pv.GetEdges()))
+										Disconnect(edge);
+							foreach (var pv in nodeView.outputPortViews)
+								if (pv.orientation == Orientation.Vertical)
+									foreach (var edge in new List<EdgeView>(pv.GetEdges()))
 										Disconnect(edge);
 
 							nodeInspector.NodeViewRemoved(nodeView);
@@ -402,7 +432,15 @@ namespace GraphProcessor
 		{
 			if (changes.removedEdge != null)
 			{
-				var edge = edgeViews.FirstOrDefault(e => e.serializedEdge == changes.removedEdge);
+				EdgeView edge = null;
+				foreach (var ev in edgeViews)
+				{
+					if (ev.serializedEdge == changes.removedEdge)
+					{
+						edge = ev;
+						break;
+					}
+				}
 
 				DisconnectView(edge);
 			}
@@ -429,25 +467,35 @@ namespace GraphProcessor
 		{
 			var compatiblePorts = new List< Port >();
 
-			compatiblePorts.AddRange(ports.ToList().Where(p => {
+			foreach (var p in ports)
+			{
 				var portView = p as PortView;
 
 				if (portView.owner == (startPort as PortView).owner)
-					return false;
+					continue;
 
 				if (p.direction == startPort.direction)
-					return false;
+					continue;
 
 				//Check for type assignability
 				if (!BaseGraph.TypesAreConnectable(startPort.portType, p.portType))
-					return false;
+					continue;
 
 				//Check if the edge already exists
-				if (portView.GetEdges().Any(e => e.input == startPort || e.output == startPort))
-					return false;
+				bool edgeExists = false;
+				foreach (var e in portView.GetEdges())
+				{
+					if (e.input == startPort || e.output == startPort)
+					{
+						edgeExists = true;
+						break;
+					}
+				}
+				if (edgeExists)
+					continue;
 
-				return true;
-			}));
+				compatiblePorts.Add(p);
+			}
 
 			return compatiblePorts;
 		}
@@ -598,11 +646,22 @@ namespace GraphProcessor
 
 		bool DoesSelectionContainsInspectorNodes()
 		{
-			var selectedNodes = selection.Where(s => s is BaseNodeView).ToList();
-			var selectedNodesNotInInspector = selectedNodes.Except(nodeInspector.selectedNodes).ToList();
-			var nodeInInspectorWithoutSelectedNodes = nodeInspector.selectedNodes.Except(selectedNodes).ToList();
+			var selectedNodeViews = new HashSet<BaseNodeView>();
+			foreach (var s in selection)
+				if (s is BaseNodeView bnv)
+					selectedNodeViews.Add(bnv);
 
-			return selectedNodesNotInInspector.Any() || nodeInInspectorWithoutSelectedNodes.Any();
+			// Any selected node view not currently tracked by the inspector?
+			foreach (var v in selectedNodeViews)
+				if (!nodeInspector.selectedNodes.Contains(v))
+					return true;
+
+			// Any node view tracked by the inspector that's no longer selected?
+			foreach (var v in nodeInspector.selectedNodes)
+				if (!selectedNodeViews.Contains(v))
+					return true;
+
+			return false;
 		}
 
 		void DragPerformedCallback(DragPerformEvent e)
@@ -613,8 +672,11 @@ namespace GraphProcessor
 			// Drag and Drop for elements inside the graph
 			if (dragData != null)
 			{
-				var exposedParameterFieldViews = dragData.OfType<ExposedParameterFieldView>();
-				if (exposedParameterFieldViews.Any())
+				var exposedParameterFieldViews = new List<ExposedParameterFieldView>();
+				foreach (var d in dragData)
+					if (d is ExposedParameterFieldView epfv)
+						exposedParameterFieldViews.Add(epfv);
+				if (exposedParameterFieldViews.Count > 0)
 				{
 					foreach (var paramFieldView in exposedParameterFieldViews)
 					{
@@ -666,10 +728,14 @@ namespace GraphProcessor
             if (dragData != null)
             {
                 // Handle drag from exposed parameter view
-                if (dragData.OfType<ExposedParameterFieldView>().Any())
-				{
-                    dragging = true;
-				}
+                foreach (var d in dragData)
+                {
+                    if (d is ExposedParameterFieldView)
+                    {
+                        dragging = true;
+                        break;
+                    }
+                }
             }
 
 			if (dragObjects.Length > 0)
@@ -722,10 +788,18 @@ namespace GraphProcessor
 			UpdateComputeOrder();
 
 			// Restore selection after re-creating all views
-			// selection = nodeViews.Where(v => selectedNodeGUIDs.Contains(v.nodeTarget.GUID)).Select(v => v as ISelectable).ToList();
 			foreach (var guid in selectedNodeGUIDs)
 			{
-				AddToSelection(nodeViews.FirstOrDefault(n => n.nodeTarget.GUID == guid));
+				BaseNodeView nodeView = null;
+				foreach (var n in nodeViews)
+				{
+					if (n.nodeTarget.GUID == guid)
+					{
+						nodeView = n;
+						break;
+					}
+				}
+				AddToSelection(nodeView);
 			}
 
 			UpdateNodeInspectorSelection();
@@ -777,7 +851,6 @@ namespace GraphProcessor
 			foreach (var nodeInfo in NodeProvider.GetNodeMenuEntries(graph))
 			{
 				var interfaces = nodeInfo.type.GetInterfaces();
-                var exceptInheritedInterfaces = interfaces.Except(interfaces.SelectMany(t => t.GetInterfaces()));
 				foreach (var i in interfaces)
 				{
 					if (i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICreateNodeFrom<>))
@@ -824,7 +897,7 @@ namespace GraphProcessor
 		void InitializeGraphView()
 		{
 			graph.onExposedParameterListChanged += OnExposedParameterListChanged;
-			graph.onExposedParameterModified += (s) => onExposedParameterModified?.Invoke(s);
+			graph.onExposedParameterModified += OnGraphExposedParameterModified;
 			graph.onGraphChanges += GraphChangesCallback;
 			viewTransform.position = graph.position;
 			viewTransform.scale = graph.scale;
@@ -836,6 +909,8 @@ namespace GraphProcessor
 			UpdateSerializedProperties();
 			onExposedParameterListChanged?.Invoke();
 		}
+
+		void OnGraphExposedParameterModified(ExposedParameter param) => onExposedParameterModified?.Invoke(param);
 
 		void InitializeNodeViews()
 		{
@@ -1132,7 +1207,11 @@ namespace GraphProcessor
 			//If the input port does not support multi-connection, we remove them
 			if (autoDisconnectInputs && !(e.input as PortView).portData.acceptMultipleEdges)
 			{
-				foreach (var edge in edgeViews.Where(ev => ev.input == e.input).ToList())
+				var edgesToDisconnect = new List<EdgeView>();
+				foreach (var ev in edgeViews)
+					if (ev.input == e.input)
+						edgesToDisconnect.Add(ev);
+				foreach (var edge in edgesToDisconnect)
 				{
 					// TODO: do not disconnect them if the connected port is the same than the old connected
 					DisconnectView(edge);
@@ -1141,7 +1220,11 @@ namespace GraphProcessor
 			// same for the output port:
 			if (autoDisconnectInputs && !(e.output as PortView).portData.acceptMultipleEdges)
 			{
-				foreach (var edge in edgeViews.Where(ev => ev.output == e.output).ToList())
+				var edgesToDisconnect = new List<EdgeView>();
+				foreach (var ev in edgeViews)
+					if (ev.output == e.output)
+						edgesToDisconnect.Add(ev);
+				foreach (var edge in edgesToDisconnect)
 				{
 					// TODO: do not disconnect them if the connected port is the same than the old connected
 					DisconnectView(edge);
@@ -1409,7 +1492,7 @@ namespace GraphProcessor
 			exposedParameterFactory = null;
 
 			graph.onExposedParameterListChanged -= OnExposedParameterListChanged;
-			graph.onExposedParameterModified += (s) => onExposedParameterModified?.Invoke(s);
+			graph.onExposedParameterModified -= OnGraphExposedParameterModified;
 			graph.onGraphChanges -= GraphChangesCallback;
         }
 

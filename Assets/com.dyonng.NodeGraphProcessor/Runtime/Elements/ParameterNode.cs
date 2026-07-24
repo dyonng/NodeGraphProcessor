@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using GraphProcessor;
-using System.Linq;
 using System;
 
 namespace GraphProcessor
@@ -36,6 +35,11 @@ namespace GraphProcessor
 			graph.onExposedParameterModified += OnParamChanged;
 			if (onParameterChanged != null)
 				onParameterChanged?.Invoke();
+		}
+
+		protected override void Disable()
+		{
+			graph.onExposedParameterModified -= OnParamChanged;
 		}
 
 		void LoadExposedParameter()

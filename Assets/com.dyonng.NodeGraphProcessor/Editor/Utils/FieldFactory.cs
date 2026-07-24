@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
 using System;
-using System.Linq;
 using System.Reflection;
 using System.Globalization;
 
@@ -21,7 +20,8 @@ namespace GraphProcessor
 		{
 			foreach (var type in AppDomain.CurrentDomain.GetAllTypes())
 			{
-				var drawerAttribute = type.GetCustomAttributes(typeof(FieldDrawerAttribute), false).FirstOrDefault() as FieldDrawerAttribute;
+				var drawerAttributes = type.GetCustomAttributes(typeof(FieldDrawerAttribute), false);
+				var drawerAttribute = drawerAttributes.Length > 0 ? drawerAttributes[0] as FieldDrawerAttribute : null;
 
 				if (drawerAttribute == null)
 					continue ;
@@ -75,7 +75,16 @@ namespace GraphProcessor
 			fieldDrawers.TryGetValue(t, out drawerType);
 
 			if (drawerType == null)
-				drawerType = fieldDrawers.FirstOrDefault(kp => kp.Key.IsReallyAssignableFrom(t)).Value;
+			{
+				foreach (var kp in fieldDrawers)
+				{
+					if (kp.Key.IsReallyAssignableFrom(t))
+					{
+						drawerType = kp.Value;
+						break;
+					}
+				}
+			}
 
 			if (drawerType == null)
 			{

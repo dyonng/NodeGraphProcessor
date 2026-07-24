@@ -4,7 +4,6 @@ using UnityEngine;
 using System;
 using System.Reflection;
 using Unity.Jobs;
-using System.Linq;
 
 namespace GraphProcessor
 {
@@ -233,9 +232,11 @@ namespace GraphProcessor
 				methods = baseType.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
 				foreach (var method in methods)
 				{
-					var typeBehaviors = method.GetCustomAttributes<CustomPortTypeBehavior>().ToArray();
+					var typeBehaviors = new List<CustomPortTypeBehavior>();
+					foreach (var attr in method.GetCustomAttributes<CustomPortTypeBehavior>())
+						typeBehaviors.Add(attr);
 
-					if (typeBehaviors.Length == 0)
+					if (typeBehaviors.Count == 0)
 						continue;
 
 					CustomPortTypeBehaviorDelegate deleg = null;
@@ -267,7 +268,7 @@ namespace GraphProcessor
 		{
 			InitializeCustomPortTypeMethods();
 
-			foreach (var key in OverrideFieldOrder(nodeFields.Values.Select(k => k.info)))
+			foreach (var key in OverrideFieldOrder(GetNodeFieldInfos()))
 			{
 				var nodeField = nodeFields[key.Name];
 
@@ -303,8 +304,34 @@ namespace GraphProcessor
 				return level;
 			}
 
+			var sortedFields = new List<FieldInfo>(fields);
+			var keys = new long[sortedFields.Count];
+			for (int i = 0; i < sortedFields.Count; i++)
+				keys[i] = (long)(((GetFieldInheritanceLevel(sortedFields[i]) << 32)) | (long)sortedFields[i].MetadataToken);
+
+			var indices = new int[sortedFields.Count];
+			for (int i = 0; i < indices.Length; i++)
+				indices[i] = i;
+
 			// Order by MetadataToken and inheritance level to sync the order with the port order (make sure FieldDrawers are next to the correct port)
-			return fields.OrderByDescending(f => (long)(((GetFieldInheritanceLevel(f) << 32)) | (long)f.MetadataToken));
+			// Stable descending sort: higher key first, ties broken by original order
+			Array.Sort(indices, (a, b) => {
+				int cmp = keys[b].CompareTo(keys[a]);
+				return cmp != 0 ? cmp : a.CompareTo(b);
+			});
+
+			var result = new List<FieldInfo>(sortedFields.Count);
+			foreach (var idx in indices)
+				result.Add(sortedFields[idx]);
+			return result;
+		}
+
+		List<FieldInfo> GetNodeFieldInfos()
+		{
+			var infos = new List<FieldInfo>(nodeFields.Count);
+			foreach (var kv in nodeFields)
+				infos.Add(kv.Value.info);
+			return infos;
 		}
 
 		protected BaseNode()
@@ -322,7 +349,7 @@ namespace GraphProcessor
 		{
 			bool changed = false;
 
-			foreach (var key in OverrideFieldOrder(nodeFields.Values.Select(k => k.info)))
+			foreach (var key in OverrideFieldOrder(GetNodeFieldInfos()))
 			{
 				var field = nodeFields[key.Name];
 				changed |= UpdatePortsForField(field.fieldName);
@@ -338,7 +365,7 @@ namespace GraphProcessor
 		{
 			bool changed = false;
 
-			foreach (var key in OverrideFieldOrder(nodeFields.Values.Select(k => k.info)))
+			foreach (var key in OverrideFieldOrder(GetNodeFieldInfos()))
 			{
 				var field = nodeFields[key.Name];
 				changed |= UpdatePortsForFieldLocal(field.fieldName);
@@ -369,9 +396,19 @@ namespace GraphProcessor
 			var portCollection = fieldInfo.input ? (NodePortContainer)inputPorts : outputPorts;
 
 			// Gather all fields for this port (before to modify them)
-			var nodePorts = portCollection.Where(p => p.fieldName == fieldName);
+			List<NodePort> FindPortsForField()
+			{
+				var result = new List<NodePort>();
+				foreach (var p in portCollection)
+					if (p.fieldName == fieldName)
+						result.Add(p);
+				return result;
+			}
+
 			// Gather all edges connected to these fields:
-			var edges = nodePorts.SelectMany(n => n.GetEdges()).ToList();
+			var edges = new List<SerializableEdge>();
+			foreach (var p in FindPortsForField())
+				edges.AddRange(p.GetEdges());
 
 			if (fieldInfo.behavior != null)
 			{
@@ -388,7 +425,15 @@ namespace GraphProcessor
 
 			void AddPortData(PortData portData)
 			{
-				var port = nodePorts.FirstOrDefault(n => n.portData.identifier == portData.identifier);
+				NodePort port = null;
+				foreach (var p in FindPortsForField())
+				{
+					if (p.portData.identifier == portData.identifier)
+					{
+						port = p;
+						break;
+					}
+				}
 				// Guard using the port identifier so we don't duplicate identifiers
 				if (port == null)
 				{
@@ -400,12 +445,13 @@ namespace GraphProcessor
 					// in case the port type have changed for an incompatible type, we disconnect all the edges attached to this port
 					if (!BaseGraph.TypesAreConnectable(port.portData.displayType, portData.displayType))
 					{
-						foreach (var edge in port.GetEdges().ToList())
+						var edgesCopy = new List<SerializableEdge>(port.GetEdges());
+						foreach (var edge in edgesCopy)
 							graph.Disconnect(edge.GUID);
 					}
 
 					// patch the port data
-					if (port.portData != portData)
+					if (!port.portData.Equals(portData))
 					{
 						port.portData.CopyFrom(portData);
 						changed = true;
@@ -417,17 +463,14 @@ namespace GraphProcessor
 
 			// TODO
 			// Remove only the ports that are no more in the list
-			if (nodePorts != null)
+			var currentPortsCopy = FindPortsForField();
+			foreach (var currentPort in currentPortsCopy)
 			{
-				var currentPortsCopy = nodePorts.ToList();
-				foreach (var currentPort in currentPortsCopy)
+				// If the current port does not appear in the list of final ports, we remove it
+				if (!finalPorts.Contains(currentPort.portData.identifier))
 				{
-					// If the current port does not appear in the list of final ports, we remove it
-					if (!finalPorts.Any(id => id == currentPort.portData.identifier))
-					{
-						RemovePort(fieldInfo.input, currentPort);
-						changed = true;
-					}
+					RemovePort(fieldInfo.input, currentPort);
+					changed = true;
 				}
 			}
 
@@ -455,8 +498,18 @@ namespace GraphProcessor
 
 			if (customPortTypeBehaviorMap.ContainsKey(info.info.FieldType))
 				return true;
-			
+
 			return false;
+		}
+
+		static bool FieldNamesEqual(List<string> a, List<string> b)
+		{
+			if (a.Count != b.Count)
+				return false;
+			for (int i = 0; i < a.Count; i++)
+				if (a[i] != b[i])
+					return false;
+			return true;
 		}
 
 		/// <summary>
@@ -480,7 +533,16 @@ namespace GraphProcessor
 				var (fields, node) = fieldsToUpdate.Pop();
 
 				// Avoid updating twice a port
-				if (updatedFields.Any((t) => t.node == node && fields.SequenceEqual(t.fieldNames)))
+				bool alreadyUpdated = false;
+				foreach (var t in updatedFields)
+				{
+					if (t.node == node && FieldNamesEqual(fields, t.fieldNames))
+					{
+						alreadyUpdated = true;
+						break;
+					}
+				}
+				if (alreadyUpdated)
 					continue;
 				updatedFields.Add(new PortUpdate{fieldNames = fields, node = node});
 
@@ -496,7 +558,10 @@ namespace GraphProcessor
 							foreach(var edge in port.GetEdges())
 							{
 								var edgeNode = (node.IsFieldInput(field)) ? edge.outputNode : edge.inputNode;
-								var fieldsWithBehavior = edgeNode.nodeFields.Values.Where(f => HasCustomBehavior(f)).Select(f => f.fieldName).ToList();
+								var fieldsWithBehavior = new List<string>();
+								foreach (var f in edgeNode.nodeFields.Values)
+									if (HasCustomBehavior(f))
+										fieldsWithBehavior.Add(f.fieldName);
 								fieldsToUpdate.Push(new PortUpdate{fieldNames = fieldsWithBehavior, node = edgeNode});
 							}
 						}
@@ -618,7 +683,15 @@ namespace GraphProcessor
 			portCollection.Remove(edge);
 
 			// Reset default values of input port:
-			bool haveConnectedEdges = edge.inputNode.inputPorts.Where(p => p.fieldName == edge.inputFieldName).Any(p => p.GetEdges().Count != 0);
+			bool haveConnectedEdges = false;
+			foreach (var p in edge.inputNode.inputPorts)
+			{
+				if (p.fieldName == edge.inputFieldName && p.GetEdges().Count != 0)
+				{
+					haveConnectedEdges = true;
+					break;
+				}
+			}
 			if (edge.inputNode == this && !haveConnectedEdges && CanResetPort(edge.inputPort))
 				edge.inputPort?.ResetToDefault();
 
@@ -766,10 +839,19 @@ namespace GraphProcessor
 		/// <returns></returns>
 		public NodePort	GetPort(string fieldName, string identifier)
 		{
-			return inputPorts.Concat(outputPorts).FirstOrDefault(p => {
+			foreach (var p in inputPorts)
+			{
 				var bothNull = String.IsNullOrEmpty(identifier) && String.IsNullOrEmpty(p.portData.identifier);
-				return p.fieldName == fieldName && (bothNull || identifier == p.portData.identifier);
-			});
+				if (p.fieldName == fieldName && (bothNull || identifier == p.portData.identifier))
+					return p;
+			}
+			foreach (var p in outputPorts)
+			{
+				var bothNull = String.IsNullOrEmpty(identifier) && String.IsNullOrEmpty(p.portData.identifier);
+				if (p.fieldName == fieldName && (bothNull || identifier == p.portData.identifier))
+					return p;
+			}
+			return null;
 		}
 
 		/// <summary>

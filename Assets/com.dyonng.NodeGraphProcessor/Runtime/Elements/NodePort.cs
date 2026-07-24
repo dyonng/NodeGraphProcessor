@@ -1,6 +1,5 @@
 // #define DEBUG_LAMBDA
 
-using System.Linq;
 using System.Collections.Generic;
 using System.Collections;
 using UnityEngine;
@@ -311,7 +310,7 @@ namespace GraphProcessor
 			// take multiple inputs, you must create a custom input function see CustomPortsNode.cs
 			if (edges.Count > 0)
 			{
-				var passThroughObject = edges.First().passThroughBuffer;
+				var passThroughObject = edges[0].passThroughBuffer;
 
 				// We do an extra convertion step in case the buffer output is not compatible with the input port
 				if (passThroughObject != null)
@@ -357,10 +356,15 @@ namespace GraphProcessor
 			if (String.IsNullOrEmpty(portIdentifier))
 				portIdentifier = null;
 
-			var port = this.FirstOrDefault(p =>
+			NodePort port = null;
+			for (int i = 0; i < Count; i++)
 			{
-				return p.fieldName == portFieldName && p.portData.identifier == portIdentifier;
-			});
+				if (this[i].fieldName == portFieldName && this[i].portData.identifier == portIdentifier)
+				{
+					port = this[i];
+					break;
+				}
+			}
 
 			if (port == null)
 			{
