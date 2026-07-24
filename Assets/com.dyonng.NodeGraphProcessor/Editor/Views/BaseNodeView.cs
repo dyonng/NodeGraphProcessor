@@ -211,8 +211,12 @@ namespace GraphProcessor
 				titleTextField.focusable = true;
 
 				titleTextField.SetValueWithoutNotify(title);
-				titleTextField.Focus();
-				titleTextField.SelectAll();
+
+				titleTextField.schedule.Execute(() =>
+				{
+					titleTextField.Focus();
+					titleTextField.SelectAll();
+				});
 			}
 
 			void CloseAndSaveTitleEditor(string newTitle)
@@ -266,7 +270,6 @@ namespace GraphProcessor
 			}
 		}
 
-		// Workaround for bug in GraphView that makes the node selection border way too big
 		VisualElement selectionBorder, nodeBorder;
 		internal void EnableSyncSelectionBorderHeight()
 		{
@@ -275,9 +278,9 @@ namespace GraphProcessor
 				selectionBorder = this.Q("selection-border");
 				nodeBorder = this.Q("node-border");
 
-				schedule.Execute(() => {
+				nodeBorder.RegisterCallback<GeometryChangedEvent>(e => {
 					selectionBorder.style.height = nodeBorder.localBound.height;
-				}).Every(17);
+				});
 			}
 		}
 		
@@ -826,6 +829,10 @@ namespace GraphProcessor
 		Regex s_ReplaceNodeIndexPropertyPath = new Regex(@"(^nodes.Array.data\[)(\d+)(\])");
 		internal void SyncSerializedPropertyPathes()
 		{
+			if (owner.serializedGraph == null)
+				return;
+
+			// Find the actual index of this node in the graph's node list
 			int nodeIndex = owner.graph.nodes.FindIndex(n => n == nodeTarget);
 
 			// If the node is not found, then it means that it has been deleted from serialized data.
@@ -835,6 +842,8 @@ namespace GraphProcessor
 			var nodeIndexString = nodeIndex.ToString();
 			foreach (var propertyField in this.Query<PropertyField>().ToList())
 			{
+				if (propertyField.bindingPath == null)
+					continue;
 				propertyField.Unbind();
 				// The property path look like this: nodes.Array.data[x].fieldName
 				// And we want to update the value of x with the new node index:
@@ -863,7 +872,17 @@ namespace GraphProcessor
 #endif
 
 			if (typeof(IList).IsAssignableFrom(field.FieldType))
+			{
 				EnableSyncSelectionBorderHeight();
+				element.RegisterCallback<MouseDownEvent>(e => {
+					if (e.button == 0)
+						e.StopPropagation();
+				});
+				element.RegisterCallback<MouseMoveEvent>(e => {
+					if (e.pressedButtons == 1)
+						e.StopPropagation();
+				});
+			}
 
 			element.RegisterValueChangeCallback(e => {
 				UpdateFieldVisibility(field.Name, field.GetValue(nodeTarget));
