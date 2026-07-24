@@ -1,7 +1,7 @@
 {
     "name": "com.dyonng.node-graph-processor",
     "displayName": "Node Graph Processor",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "unity": "6000.5",
     "description": "Node graph editor framework focused on data processing using Unity UIElements and C# 4.7",
     "keywords": [
@@ -9,12 +9,5 @@
 		"UIElements",
         "unity"
     ],
-     "samples": [
-       {
-         "displayName": "Examples",
-         "description": "A bunch of examples using the NodeGraphProcessor API to create custom nodes and graphs",
-         "path": "Samples~/Examples"
-       }
-     ],
     "category": "Unity"
 }
