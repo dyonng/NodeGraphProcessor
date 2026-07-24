@@ -179,8 +179,15 @@ namespace GraphProcessor
 		{
 			// Sanitize the element lists (it's possible that nodes are null if their full class name have changed)
 			// If you rename / change the assembly of a node or parameter, please use the MovedFrom() attribute to avoid breaking the graph.
-			nodes.RemoveAll(n => n == null);
-			exposedParameters.RemoveAll(e => e == null);
+			int removedNodeCount = nodes.RemoveAll(n => n == null);
+			if (removedNodeCount > 0)
+				Debug.LogWarning($"[{name}] {removedNodeCount} node(s) failed to deserialize and were removed from the graph. " +
+					"This can happen if a node's class was renamed/deleted (use [MovedFrom] to avoid this), or if a serialization " +
+					"migration failed to resolve them. If this graph is under version control, check its diff before this gets saved over the last good copy.");
+
+			int removedParameterCount = exposedParameters.RemoveAll(e => e == null);
+			if (removedParameterCount > 0)
+				Debug.LogWarning($"[{name}] {removedParameterCount} exposed parameter(s) failed to deserialize and were removed from the graph.");
 
 			var nodesCopy = new List<BaseNode>(nodes);
 			foreach (var node in nodesCopy)
@@ -839,12 +846,19 @@ namespace GraphProcessor
 
 		void DestroyBrokenGraphElements()
 		{
-			edges.RemoveAll(e => e.inputNode == null
+			int removedEdgeCount = edges.RemoveAll(e => e.inputNode == null
 				|| e.outputNode == null
 				|| string.IsNullOrEmpty(e.outputFieldName)
 				|| string.IsNullOrEmpty(e.inputFieldName)
 			);
-			nodes.RemoveAll(n => n == null);
+			if (removedEdgeCount > 0)
+				Debug.LogWarning($"[{name}] {removedEdgeCount} edge(s) were broken (missing endpoint node or field) and were removed from the graph.");
+
+			int removedNodeCount = nodes.RemoveAll(n => n == null);
+			if (removedNodeCount > 0)
+				Debug.LogWarning($"[{name}] {removedNodeCount} node(s) failed to deserialize and were removed from the graph. " +
+					"This can happen if a node's class was renamed/deleted (use [MovedFrom] to avoid this), or if a serialization " +
+					"migration failed to resolve them. If this graph is under version control, check its diff before this gets saved over the last good copy.");
 		}
 		
 		/// <summary>
