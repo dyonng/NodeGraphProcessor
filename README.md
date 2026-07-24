@@ -73,11 +73,11 @@ To install using the package manager:
 In the Package Manager, use `Add package from git URL` and paste:
 
 ```
-https://github.com/dyonng/NodeGraphProcessor.git?path=Assets/com.dyonng.NodeGraphProcessor#v1.4.0
+https://github.com/dyonng/NodeGraphProcessor.git?path=Assets/com.dyonng.NodeGraphProcessor#v1.4.3
 ```
 
-The `?path=` points Unity at the package subfolder, and `#v1.4.0` pins to a released tag so your
-install doesn't shift under you when the branch moves. Drop the `#v1.4.0` to track `master`
+The `?path=` points Unity at the package subfolder, and `#v1.4.3` pins to a released tag so your
+install doesn't shift under you when the branch moves. Drop the `#v1.4.3` to track `master`
 directly instead (not recommended for shared projects).
 
 Note that you'll not have access to the examples provided in this repo because the package only include the core of NodeGraphProcessor — see Install Manually above if you want the `Assets/Examples` content too.
@@ -95,15 +95,25 @@ Note that you'll not have access to the examples provided in this repo because t
   graphs still deserialize correctly).
 - **Cherry-picked open upstream PRs**: node-view crash/UX fixes (bad node-view rebind and a crash
   in `SyncSerializedPropertyPathes` on delete-with-connections, list-item clicks no longer trigger
-  node drag), a node-rename focus-timing fix, and a reflection fix so inherited
-  `[CustomPortTypeBehavior]` methods on base classes are found.
+  node drag), a node-rename focus-timing fix, a reflection fix so inherited
+  `[CustomPortTypeBehavior]` methods on base classes are found, `BaseGraphView.CanConnectEdge` made
+  `virtual` for custom edge-validation overrides, and asset-drag node creation now prioritizes the
+  most-derived matching node type instead of an arbitrary insertion-order match.
 - **Removed all LINQ usage** across the package (Runtime + Editor, ~130 call sites in 23 files),
   replaced with explicit loops to cut GC churn — LINQ's iterators, closures, and boxed enumerators
   were a meaningful allocation source in hot paths like port syncing and graph traversal.
 - **Bug fixes found along the way**: `PortData` was being compared by reference instead of value
   (`Equals`), causing spurious port-view rebuilds on every sync; `ParameterNode` and
   `BaseGraphView` leaked event subscriptions on enable/disable and dispose; `RelayNode` could throw
-  on an empty port list; a node-deletion path never removed its view from internal tracking lists.
+  on an empty port list; a node-deletion path never removed its view from internal tracking lists;
+  the `CustomPortsNode` example could crash with an out-of-range index when its output port had
+  connections but its input port didn't; `package.json` declared a `samples` entry pointing at a
+  path that doesn't exist for git-URL installs, which crashed Package Manager on every package-list
+  refresh.
+- **No more silent data loss on graph load** — if a node, edge, or exposed parameter fails to
+  deserialize (renamed/deleted class, failed serialization migration, etc.), the graph used to
+  silently drop it and resave without a trace. It now logs a `Debug.LogWarning` naming the graph
+  asset and exact count removed, so it's visible before it overwrites the last good copy on disk.
 - **Performance work**: eliminated a redundant duplicate graph-traversal build on every single edge
   edit, batched `SerializedObject`/property-path rebinding on multi-element delete (was rebuilding
   once per deleted element), removed several boxed-enumerator and per-call allocation hot spots in
