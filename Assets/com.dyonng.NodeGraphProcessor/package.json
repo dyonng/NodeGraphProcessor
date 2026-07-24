@@ -2,7 +2,7 @@
     "name": "com.dyonng.node-graph-processor",
     "displayName": "Node Graph Processor",
     "version": "1.4.0",
-    "unity": "6000.0",
+    "unity": "6000.5",
     "description": "Node graph editor framework focused on data processing using Unity UIElements and C# 4.7",
     "keywords": [
         "graph",
